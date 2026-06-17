@@ -1,0 +1,21 @@
+# Credentials — never commit
+.env
+
+# Database
+data/leads.db
+
+# Logs
+logs/
+
+# Local packages (Docker handles this on server)
+venv_packages/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.idea/
