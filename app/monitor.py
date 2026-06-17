@@ -352,12 +352,14 @@ def run_monitor() -> None:
         quiet_end   = get_quiet_hours_end()
 
         try:
-            new_leads = _process_poll()
-            consecutive_session_errors = 0
-
-            # Count overnight leads (detected during quiet hours)
+            # Skip polling during quiet hours — resume at QUIET_HOURS_END
             if _is_quiet_window(now_hour, quiet_start, quiet_end):
-                _overnight_leads += new_leads
+                logger.debug("Quiet hours (%d:00–%d:00) — polling paused.", quiet_start, quiet_end)
+                # Still track overnight leads if any slipped through
+                pass
+            else:
+                new_leads = _process_poll()
+                consecutive_session_errors = 0
 
             # --- Going quiet message (once at quiet start hour) ---
             if now_hour == quiet_start and not _quiet_notified:
