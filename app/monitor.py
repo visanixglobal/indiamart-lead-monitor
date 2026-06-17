@@ -1,16 +1,5 @@
 """
 IndiaMART Lead Monitor – core polling engine.
-
-Polls three endpoints every cycle:
-  1. getBLDisplayData      – Recent buy leads (primary)
-  2. getMoreLeadsData      – Suggested / relevant leads
-  3. getShortlistedData    – Shortlisted / wishlisted leads
-
-Known endpoints (Phase 2, NOT implemented here):
-  - getBuyLeadDetails      – Full lead detail after selection
-  - contactBuyNow          – Consume / contact a lead
-  - getPurchasedLeads      – Already purchased leads
-  - getBuyLeadBalanceData  – Remaining lead credits
 """
 
 from __future__ import annotations
@@ -20,8 +9,15 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import requests
+
+IST = ZoneInfo("Asia/Kolkata")
+
+def _now_ist() -> datetime:
+    """Return current time in IST."""
+    return datetime.now(IST)
 
 from app.config import get_cookie, get_glusrid, get_poll_interval, is_configured, get_quiet_hours_start, get_quiet_hours_end
 from app.database import init_db, insert_lead, lead_exists, get_stats
@@ -136,7 +132,7 @@ def _post(url: str, payload: dict, referer: str, source_tag: str) -> Optional[An
         raise SessionExpiredError("IndiaMART session expired. Refresh cookies.")
 
     _save_raw(source_tag, data)
-    state["last_successful_api_call"] = datetime.now().isoformat()
+    state["last_successful_api_call"] = datetime.now(IST).isoformat()
     return data
 
 
@@ -346,8 +342,8 @@ def run_monitor() -> None:
     _overnight_leads    = 0
 
     while True:
-        state["last_poll_time"] = datetime.now().isoformat()
-        now_hour = datetime.now().hour
+        state["last_poll_time"] = datetime.now(IST).isoformat()
+        now_hour = _now_ist().hour
         quiet_start = get_quiet_hours_start()
         quiet_end   = get_quiet_hours_end()
 
@@ -366,7 +362,7 @@ def run_monitor() -> None:
                 stats = get_stats()
                 send_going_quiet(quiet_end, today_leads=stats["today_leads"])
                 _quiet_notified  = True
-                _morning_notified = False   # reset for next morning
+                _morning_notified = False
                 _overnight_leads  = 0
 
             # Reset quiet flag when we leave the quiet window
@@ -391,7 +387,7 @@ def run_monitor() -> None:
                 send_heartbeat(
                     total_leads=stats["total_leads"],
                     today_leads=stats["today_leads"],
-                    last_poll=datetime.now().strftime("%H:%M:%S"),
+                    last_poll=_now_ist().strftime("%H:%M:%S IST"),
                 )
                 _last_heartbeat = now_ts
 
