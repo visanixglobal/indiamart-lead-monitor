@@ -42,7 +42,10 @@ def get_glusrid() -> str:
 
 def get_cookie() -> str:
     _load()
-    return os.getenv("INDIAMART_COOKIE", "").strip()
+    cookie = os.getenv("INDIAMART_COOKIE", "").strip()
+    # Remove any non-latin-1 characters that would break HTTP headers
+    cookie = cookie.encode("latin-1", errors="ignore").decode("latin-1")
+    return cookie
 
 
 def get_poll_interval() -> int:
