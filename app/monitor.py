@@ -117,6 +117,7 @@ _SESSION_ERROR_PHRASES = [
     "invalid session",
 ]
 _SESSION_RETRY_INTERVAL = 300  # 5 minutes
+_ERROR_NOTIFY_INTERVAL  = 600  # notify at most once per 10 min for same error type
 
 # Shared state exposed to the API dashboard
 state: Dict[str, Any] = {
@@ -124,6 +125,21 @@ state: Dict[str, Any] = {
     "last_successful_api_call": "",
     "running": False,
 }
+
+# Error notification cooldown tracker {error_type: last_notified_timestamp}
+_last_error_notify: Dict[str, float] = {}
+
+
+def _notify_error(error_type: str, message: str) -> None:
+    """Send ntfy alert for errors, rate-limited to once per 10 minutes per error type."""
+    now = time.time()
+    last = _last_error_notify.get(error_type, 0)
+    if now - last < _ERROR_NOTIFY_INTERVAL:
+        return
+    _last_error_notify[error_type] = now
+    from app.ntfy_service import send_ntfy_text
+    send_ntfy_text(message, title="Monitor Error")
+    logger.warning("Error notification sent: %s", error_type)
 
 
 def _headers(referer: str) -> dict:
@@ -159,6 +175,7 @@ def _post(url: str, payload: dict, referer: str, source_tag: str) -> Optional[An
         resp = requests.post(url, json=payload, headers=_headers(referer), timeout=30)
     except requests.RequestException as exc:
         logger.error("[%s] Network error: %s", source_tag, exc)
+        _notify_error("network", f"Network error on {source_tag}:\n{str(exc)[:100]}")
         return None
 
     logger.debug("[%s] HTTP %s", source_tag, resp.status_code)
@@ -166,7 +183,14 @@ def _post(url: str, payload: dict, referer: str, source_tag: str) -> Optional[An
     try:
         data = resp.json()
     except ValueError:
-        logger.error("[%s] Non-JSON response (HTTP %s): %s", source_tag, resp.status_code, resp.text[:300])
+        preview = resp.text[:100].strip()
+        logger.error("[%s] Non-JSON response (HTTP %s): %s", source_tag, resp.status_code, preview)
+        if "<!DOCTYPE" in resp.text or "<html" in resp.text:
+            _notify_error("html_response",
+                          f"Session expired on {source_tag} — got login page.\n"
+                          f"Run refresh_cookie.py to fix.")
+        else:
+            _notify_error("bad_response", f"Bad response from {source_tag} (HTTP {resp.status_code})")
         return None
 
     if _is_session_error(data, resp.status_code):
@@ -488,6 +512,7 @@ def run_monitor() -> None:
 
         except Exception as exc:
             logger.exception("Unexpected error in monitor loop: %s", exc)
+            _notify_error("unexpected", f"Unexpected monitor error:\n{str(exc)[:150]}")
 
         interval = get_poll_interval()
         # Add ±30% jitter to the configured interval to avoid fixed patterns

@@ -123,6 +123,9 @@ def insert_lead(
         return True
     except sqlite3.IntegrityError:
         return False
+    except Exception as exc:
+        logger.error("Unexpected DB error inserting lead %s: %s", lead_id, exc)
+        raise
 
 
 def get_latest_leads(limit: int = 50) -> List[dict]:

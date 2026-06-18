@@ -82,7 +82,7 @@ def main():
     print(SEP)
     print(f"  Total endpoints: {len(APIS)}")
     print(f"  Base origin:     https://seller.indiamart.com")
-    print(f"  Auth:            Cookie header (INDIAMART_COOKIE in .env)")
+    print(f"  Auth:            Cookie header (hardcoded in app/config.py)")
     print(SEP)
 
     for i, api in enumerate(APIS, 1):
@@ -101,7 +101,7 @@ def main():
     print("    Content-Type       : application/json")
     print("    Accept             : */*")
     print("    Origin             : https://seller.indiamart.com")
-    print("    Cookie             : <INDIAMART_COOKIE from .env>")
+    print("    Cookie             : <_INDIAMART_COOKIE from app/config.py>")
     print("    User-Agent         : Chrome/142 (Windows)")
     print("    sec-fetch-mode     : cors")
     print("    sec-fetch-site     : same-origin")
