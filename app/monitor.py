@@ -9,15 +9,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from zoneinfo import ZoneInfo
 
 import requests
 
-IST = ZoneInfo("Asia/Kolkata")
-
 def _now_ist() -> datetime:
-    """Return current time in IST."""
-    return datetime.now(IST)
+    return datetime.now()
 
 from app.config import get_cookie, get_glusrid, get_poll_interval, is_configured, get_quiet_hours_start, get_quiet_hours_end
 from app.database import init_db, insert_lead, lead_exists, get_stats

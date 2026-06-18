@@ -47,9 +47,9 @@ def _is_quiet_hours() -> bool:
     start = get_quiet_hours_start()
     end   = get_quiet_hours_end()
     if start < end:
-        return start <= now_hour < end        # e.g. 1–8
+        return start <= now_hour < end
     else:
-        return now_hour >= start or now_hour < end  # wraps midnight e.g. 22–6
+        return now_hour >= start or now_hour < end  # wraps midnight
 
 
 def _post(topic: str, message: str, title: str,
@@ -133,7 +133,7 @@ def send_heartbeat(total_leads: int, today_leads: int, last_poll: str) -> bool:
             f"Leads today: {today_leads}\n"
             f"Total leads: {total_leads}"
         ),
-        title=f"Monitor OK [{datetime.now().strftime('%H:%M')}]",
+        title=f"Monitor OK [{datetime.now().strftime('%H:%M')} UTC]",
         priority="low",
         tags="white_check_mark",
     )
