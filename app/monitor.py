@@ -12,9 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
-def _now_ist() -> datetime:
-    return datetime.now()
-
 from app.config import get_cookie, get_glusrid, get_poll_interval, is_configured, get_quiet_hours_start, get_quiet_hours_end
 from app.database import init_db, insert_lead, lead_exists, get_stats
 from app.logger import get_logger
@@ -128,7 +125,7 @@ def _post(url: str, payload: dict, referer: str, source_tag: str) -> Optional[An
         raise SessionExpiredError("IndiaMART session expired. Refresh cookies.")
 
     _save_raw(source_tag, data)
-    state["last_successful_api_call"] = datetime.now(IST).isoformat()
+    state["last_successful_api_call"] = datetime.now().isoformat()
     return data
 
 
