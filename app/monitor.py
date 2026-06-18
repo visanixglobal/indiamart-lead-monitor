@@ -5,6 +5,7 @@ IndiaMART Lead Monitor – core polling engine.
 from __future__ import annotations
 
 import json
+import random
 import time
 from datetime import datetime
 from pathlib import Path
@@ -49,17 +50,56 @@ def _save_raw(source: str, data: Any) -> None:
 # Base HTTP helpers
 # ---------------------------------------------------------------------------
 
+_BROWSER_PROFILES = [
+    # Chrome 142
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+    },
+    # Chrome 141
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Chromium";v="141", "Google Chrome";v="141", "Not_A Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+    },
+    # Chrome 140
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Chromium";v="140", "Google Chrome";v="140", "Not_A Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+    },
+    # Chrome on Windows 11
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+    },
+    # Firefox 127 — no sec-ch-ua headers (Firefox doesn't send them)
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0",
+        "sec-ch-ua": None,
+        "sec-ch-ua-mobile": None,
+        "sec-ch-ua-platform": None,
+    },
+    # Firefox 126
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
+        "sec-ch-ua": None,
+        "sec-ch-ua-mobile": None,
+        "sec-ch-ua-platform": None,
+    },
+]
+
 _BASE_HEADERS = {
     "Content-Type": "application/json",
     "Accept": "*/*",
     "Accept-Language": "en-US,en;q=0.9",
     "Origin": "https://seller.indiamart.com",
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/142.0.0.0 Safari/537.36"
-    ),
-    "sec-ch-ua-platform": '"Windows"',
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-origin",
@@ -90,6 +130,14 @@ def _headers(referer: str) -> dict:
     h = dict(_BASE_HEADERS)
     h["Cookie"] = get_cookie()
     h["Referer"] = referer
+    # Pick a random browser profile
+    profile = random.choice(_BROWSER_PROFILES)
+    h["User-Agent"] = profile["User-Agent"]
+    # Only add sec-ch-ua headers for Chrome (Firefox doesn't send them)
+    if profile["sec-ch-ua"] is not None:
+        h["sec-ch-ua"]          = profile["sec-ch-ua"]
+        h["sec-ch-ua-mobile"]   = profile["sec-ch-ua-mobile"]
+        h["sec-ch-ua-platform"] = profile["sec-ch-ua-platform"]
     return h
 
 
@@ -196,7 +244,36 @@ def fetch_more_leads() -> Optional[Any]:
 
 
 # ---------------------------------------------------------------------------
-# Endpoint 3: getShortlistedData  (wishlisted leads)
+# Endpoint 3: getMoreLeadsDataNew  (More Leads / Related tab — newer API)
+# ---------------------------------------------------------------------------
+
+def fetch_more_leads_new() -> Optional[Any]:
+    glusrid = get_glusrid()
+    return _post(
+        url="https://seller.indiamart.com/blreact/getMoreLeadsDataNew",
+        payload={
+            "glusrid": glusrid,
+            "start": 1,
+            "end": 25,
+            "priority": "P",
+            "requestarray": {
+                "pref": "other_leads",
+                "lead_typ": "related",
+                "loc_pref": "8",
+                "stateid": "",
+                "cityid": "",
+                "iso": "",
+                "locPrefCookie": "4",
+                "deboost_val": "",
+            },
+        },
+        referer="https://seller.indiamart.com/bltxn/?pref=other_leads",
+        source_tag="getMoreLeadsDataNew",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoint 4: getShortlistedData  (wishlisted leads)
 # ---------------------------------------------------------------------------
 
 def fetch_shortlisted() -> Optional[Any]:
@@ -289,15 +366,23 @@ def _process_source(data: Optional[Any], source_label: str) -> int:
 
 def _process_poll() -> int:
     """
-    Single poll cycle.
-    Returns total number of new leads detected.
+    Single poll cycle with randomised endpoint order and inter-call delays
+    to avoid detection patterns.
     """
-    sources: List[Tuple[str, Any]] = [
-        ("recent",    fetch_bl_display()),
-        ("suggested", fetch_more_leads()),
+    # Build source list and shuffle order every cycle
+    sources_def = [
+        ("recent",    fetch_bl_display),
+        ("suggested", fetch_more_leads),
+        ("related",   fetch_more_leads_new),
     ]
+    random.shuffle(sources_def)
 
-    total_new = sum(_process_source(data, label) for label, data in sources)
+    total_new = 0
+    for label, fetch_fn in sources_def:
+        data = fetch_fn()
+        total_new += _process_source(data, label)
+        # Random delay between API calls: 2–6 seconds
+        time.sleep(random.uniform(2, 6))
 
     if total_new == 0:
         logger.debug("Poll complete – no new leads.")
@@ -405,5 +490,9 @@ def run_monitor() -> None:
             logger.exception("Unexpected error in monitor loop: %s", exc)
 
         interval = get_poll_interval()
-        logger.debug("Sleeping %ds until next poll.", interval)
-        time.sleep(interval)
+        # Add ±30% jitter to the configured interval to avoid fixed patterns
+        jitter = random.uniform(0.7, 1.3)
+        sleep_secs = int(interval * jitter)
+        logger.debug("Sleeping %ds until next poll (base=%ds, jitter=%.2f).",
+                     sleep_secs, interval, jitter)
+        time.sleep(sleep_secs)
