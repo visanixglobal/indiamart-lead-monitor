@@ -338,8 +338,8 @@ def run_monitor() -> None:
     _overnight_leads    = 0
 
     while True:
-        state["last_poll_time"] = datetime.now(IST).isoformat()
-        now_hour = _now_ist().hour
+        state["last_poll_time"] = datetime.now().isoformat()
+        now_hour = datetime.now().hour
         quiet_start = get_quiet_hours_start()
         quiet_end   = get_quiet_hours_end()
 
@@ -383,7 +383,7 @@ def run_monitor() -> None:
                 send_heartbeat(
                     total_leads=stats["total_leads"],
                     today_leads=stats["today_leads"],
-                    last_poll=_now_ist().strftime("%H:%M:%S IST"),
+                    last_poll=datetime.now().strftime("%H:%M:%S UTC"),
                 )
                 _last_heartbeat = now_ts
 
