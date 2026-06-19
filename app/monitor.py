@@ -160,7 +160,19 @@ def _headers(referer: str) -> dict:
 def _is_session_error(data: Any, status: int) -> bool:
     if status in (401, 403):
         return True
-    text = json.dumps(data).lower() if isinstance(data, (dict, list)) else str(data).lower()
+    if not isinstance(data, dict):
+        return False
+    # Only check known error-signalling fields — NOT the full blob (avoids false positives
+    # from innocent fields like BINDED, unique_id that may contain "session" as a substring)
+    error_fields = (
+        data.get("STATUS", ""),
+        data.get("MESSAGE", ""),
+        data.get("Msg", ""),
+        data.get("BLmsg", ""),
+        data.get("error", ""),
+        data.get("message", ""),
+    )
+    text = " ".join(str(f) for f in error_fields).lower()
     return any(p in text for p in _SESSION_ERROR_PHRASES)
 
 
